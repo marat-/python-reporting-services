@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+"""
+    R1C1-format formulae to A1-type converter.
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Notice: Only Reporting Services 2012 (or higher) is supporting export reports to
+            xlsx-format.
+"""
 
 import re
 

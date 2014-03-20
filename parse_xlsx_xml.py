@@ -1,4 +1,11 @@
 # -*- coding: utf-8 -*-
+"""
+    Xlsx xml-parser for Reporting Services.
+    Converts text to formulae, eg. '=SUM(A1:A10)'
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Notice: Only Reporting Services 2012 (or higher) is supporting export reports to
+            xlsx-format.
+"""
 
 import os
 import shutil
@@ -43,13 +50,15 @@ class RecursiveFileIterator:
 class ParseXlsx:
     """ Parse xlsx file and replace formulas strings to formulas format """
 
-    def __init__(self, file_name, task_id=0, show_log=False):
+    def __init__(self, file_name, task_id=0, show_log=False, run=False):
         """ Init start parameters """
         self.file_name = file_name
         self.task_id = task_id
         self.main_temp_dir = 'temp'
         self.show_log = show_log
         self.shared_strings = []
+        if run:
+            self.main()
 
     def main(self):
         """ Read xlsx file, extract files from it and parse each sheet """
@@ -121,5 +130,4 @@ class ParseXlsx:
 
 
 if __name__ == '__main__':
-    parser = ParseXlsx('formula_test.xlsx', show_log=True)
-    parser.main()
+    ParseXlsx('formula_test.xlsx', show_log=True, run=True)
