@@ -94,24 +94,22 @@ class ParseXlsx:
     def parse_sheet(self, sheet_file_name):
         """ Parse sheet and  replace formulas strings to formulas format """
         sheet_xml_object = etree.parse(sheet_file_name)
+        c_tags = sheet_xml_object.getroot().xpath("//*[local-name()='sheetData']/*[local-name()='row']/*[local-name()='c'][@t='s']")
 
-        # TODO: XPath
-        for t_tags in sheet_xml_object.getroot().getchildren():
-            if 'sheetData' in t_tags.tag:
-                for row_tag in t_tags:
-                    if len(row_tag) > 0:
-                        for c_tag in row_tag.getchildren():
-                            if len(c_tag) > 0:
-                                if c_tag.get('t') == 's' and self.shared_strings[int(c_tag[0].text) + 1]:
-                                    cur_shared_string = self.shared_strings[int(c_tag[0].text) + 1]
-                                    if cur_shared_string[0] == '=':
-                                        self.print_log(
-                                            'Find formula -> {0} in row {1}'.format(cur_shared_string, c_tag.get('r')))
-                                        right_formula = convert_rc_formula(cur_shared_string, c_tag.get('r'))
-                                        c_tag.remove(c_tag[0])
-                                        c_tag.append(etree.Element("f"))
-                                        c_tag[0].text = right_formula
-                                        del c_tag.attrib["t"]
+        for c_tag in c_tags:
+            v_tag = c_tag.xpath("*[local-name()='v']")
+
+            if self.shared_strings[int(v_tag[0].text) + 1]:
+                cur_shared_string = self.shared_strings[int(v_tag[0].text) + 1]
+                if cur_shared_string[0] == '=':
+                    self.print_log(
+                        'Find formula -> {0} in row {1}'.format(cur_shared_string, c_tag.get('r')))
+                    right_formula = convert_rc_formula(cur_shared_string, c_tag.get('r'))
+                    c_tag.remove(v_tag[0])
+                    c_tag.append(etree.Element("f"))
+                    f_tag = c_tag.xpath("*[local-name()='f']")
+                    f_tag[0].text = right_formula
+                    del c_tag.attrib["t"]
 
         file_handler = open(sheet_file_name, "w")
         file_handler.writelines(etree.tostring(sheet_xml_object, pretty_print=True))
