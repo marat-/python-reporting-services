@@ -1,4 +1,4 @@
-__author__ = "TKretts"
+__author__ = "Tkretts"
 __date__ = "$20.03.2014 08:49:47$"
 
 from setuptools import setup, find_packages
@@ -13,7 +13,7 @@ setup(
         'lxml',
     ],
 
-    author='TKretts',
+    author='Tkretts',
     author_email='tkretts666@gmail.com',
 
     url='',
