@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-    Xlsx xml-parser for Reporting Services.
-    Converts text to formulae, eg. '=SUM(A1:A10)'
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    Notice: Only Reporting Services 2012 (or higher) is supporting export reports to
-            xlsx-format.
+    Xlsx xml-parser
+    Makes your Report's formulae from text, eg. '=SUM(A22:A55)'
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Notice: Only Reporting Service 2012 (or maybe higher) supports exporting reports
+            to xlsx-format. So this module won't be useful with lower versions :(
 """
 
 import os
