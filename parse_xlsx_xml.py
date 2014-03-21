@@ -30,7 +30,7 @@ class RecursiveFileIterator:
         return result
 
     def next_dir(self):
-        dir = self.dir_queue[0]   # fails with IndexError, which is fine
+        dir = self.dir_queue[0]  # fails with IndexError, which is fine
         # for iterator interface
         del self.dir_queue[0]
         list = os.listdir(dir)
@@ -79,10 +79,15 @@ class ParseXlsx:
                 report_zip.extractall(os.getcwd())
                 # Extract all strings from sharedStrings.xml
                 shared_string_xml_object = etree.parse('xl/sharedStrings.xml')
-                for t_tags in shared_string_xml_object.getroot().getchildren():
-                    for t_tag in t_tags.getchildren():
-                        self.shared_strings.append(t_tag.text)
-                    # Process each sheet
+                si_tags = shared_string_xml_object.getroot().xpath("//*[local-name()='sst']/*[local-name()='si']")
+                for si_tag in si_tags:
+                    t_tag = si_tag.xpath("*[local-name()='t']")
+                    if (t_tag == []):
+                        self.shared_strings.append(None)
+                    else:
+                        self.shared_strings.append(t_tag[0].text)
+
+                # Process each sheet
                 for sheet_file_name in report_zip.namelist():
                     if 'xl/worksheets/sheet' in sheet_file_name:
                         self.parse_sheet(sheet_file_name)
@@ -103,24 +108,22 @@ class ParseXlsx:
     def parse_sheet(self, sheet_file_name):
         """ Parse sheet and  replace formulas strings to formulas format """
         sheet_xml_object = etree.parse(sheet_file_name)
+        c_tags = sheet_xml_object.getroot().xpath(
+            "//*[local-name()='sheetData']/*[local-name()='row']/*[local-name()='c'][@t='s']")
 
-        # TODO: XPath
-        for t_tags in sheet_xml_object.getroot().getchildren():
-            if 'sheetData' in t_tags.tag:
-                for row_tag in t_tags:
-                    if len(row_tag) > 0:
-                        for c_tag in row_tag.getchildren():
-                            if len(c_tag) > 0:
-                                if c_tag.get('t') == 's' and self.shared_strings[int(c_tag[0].text) + 1]:
-                                    cur_shared_string = self.shared_strings[int(c_tag[0].text) + 1]
-                                    if cur_shared_string[0] == '=':
-                                        self.print_log(
-                                            'Find formula -> {0} in row {1}'.format(cur_shared_string, c_tag.get('r')))
-                                        right_formula = convert_rc_formula(cur_shared_string, c_tag.get('r'))
-                                        c_tag.remove(c_tag[0])
-                                        c_tag.append(etree.Element("f"))
-                                        c_tag[0].text = right_formula
-                                        del c_tag.attrib["t"]
+        for c_tag in c_tags:
+            v_tag = c_tag.xpath("*[local-name()='v']")
+            if self.shared_strings[int(v_tag[0].text)]:
+                cur_shared_string = self.shared_strings[int(v_tag[0].text)]
+                if cur_shared_string[0] == '=':
+                    self.print_log(
+                        'Find formula -> {0} in row {1}'.format(cur_shared_string, c_tag.get('r')))
+                    right_formula = convert_rc_formula(cur_shared_string[1:], c_tag.get('r'))
+                    c_tag.remove(v_tag[0])
+                    c_tag.append(etree.Element("f"))
+                    f_tag = c_tag.xpath("*[local-name()='f']")
+                    f_tag[0].text = right_formula
+                    del c_tag.attrib["t"]
 
         file_handler = open(sheet_file_name, "w")
         file_handler.writelines(etree.tostring(sheet_xml_object, pretty_print=True))
