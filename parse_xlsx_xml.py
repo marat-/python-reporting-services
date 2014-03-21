@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-    Xlsx xml-parser for Reporting Services.
-    Converts text to formulae, eg. '=SUM(A1:A10)'
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    Notice: Only Reporting Services 2012 (or higher) is supporting export reports to
-            xlsx-format.
+    Xlsx xml-parser
+    Makes your Report's formulae from text, eg. '=SUM(A22:A55)'
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Notice: Only Reporting Service 2012 (or maybe higher) supports exporting reports
+            to xlsx-format. So this module won't be useful with lower versions :(
 """
 
 import os
@@ -30,7 +30,7 @@ class RecursiveFileIterator:
         return result
 
     def next_dir(self):
-        dir = self.dir_queue[0]   # fails with IndexError, which is fine
+        dir = self.dir_queue[0]  # fails with IndexError, which is fine
         # for iterator interface
         del self.dir_queue[0]
         list = os.listdir(dir)
@@ -79,10 +79,15 @@ class ParseXlsx:
                 report_zip.extractall(os.getcwd())
                 # Extract all strings from sharedStrings.xml
                 shared_string_xml_object = etree.parse('xl/sharedStrings.xml')
-                for t_tags in shared_string_xml_object.getroot().getchildren():
-                    for t_tag in t_tags.getchildren():
-                        self.shared_strings.append(t_tag.text)
-                    # Process each sheet
+                si_tags = shared_string_xml_object.getroot().xpath("//*[local-name()='sst']/*[local-name()='si']")
+                for si_tag in si_tags:
+                    t_tag = si_tag.xpath("*[local-name()='t']")
+                    if (t_tag == []):
+                        self.shared_strings.append(None)
+                    else:
+                        self.shared_strings.append(t_tag[0].text)
+
+                # Process each sheet
                 for sheet_file_name in report_zip.namelist():
                     if 'xl/worksheets/sheet' in sheet_file_name:
                         self.parse_sheet(sheet_file_name)
@@ -103,13 +108,13 @@ class ParseXlsx:
     def parse_sheet(self, sheet_file_name):
         """ Parse sheet and  replace formulas strings to formulas format """
         sheet_xml_object = etree.parse(sheet_file_name)
-        c_tags = sheet_xml_object.getroot().xpath("//*[local-name()='sheetData']/*[local-name()='row']/*[local-name()='c'][@t='s']")
+        c_tags = sheet_xml_object.getroot().xpath(
+            "//*[local-name()='sheetData']/*[local-name()='row']/*[local-name()='c'][@t='s']")
 
         for c_tag in c_tags:
             v_tag = c_tag.xpath("*[local-name()='v']")
-
-            if self.shared_strings[int(v_tag[0].text) + 1]:
-                cur_shared_string = self.shared_strings[int(v_tag[0].text) + 1]
+            if self.shared_strings[int(v_tag[0].text)]:
+                cur_shared_string = self.shared_strings[int(v_tag[0].text)]
                 if cur_shared_string[0] == '=':
                     self.print_log(
                         'Find formula -> {0} in row {1}'.format(cur_shared_string, c_tag.get('r')))
