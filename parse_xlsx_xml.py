@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-    Xlsx xml-parser
-    Makes your Report's formulae from text, eg. '=SUM(A22:A55)'
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    Notice: Only Reporting Service 2012 (or maybe higher) supports exporting reports
-            to xlsx-format. So this module won't be useful with lower versions :(
+    Xlsx xml-parser for Reporting Services.
+    Converts text to formulae, eg. '=SUM(A1:A10)'
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Notice: Only Reporting Services 2012 (or higher) is supporting export reports to
+            xlsx-format.
 """
 
 import os
@@ -77,16 +77,20 @@ class ParseXlsx:
             zip_file_name = os.path.join("../" * 2, self.file_name)
             with ZipFile(zip_file_name, 'a', ZIP_DEFLATED) as report_zip:
                 report_zip.extractall(os.getcwd())
-                # Extract all strings from sharedStrings.xml
-                shared_string_xml_object = etree.parse('xl/sharedStrings.xml')
-                si_tags = shared_string_xml_object.getroot().xpath("//*[local-name()='sst']/*[local-name()='si']")
-                for si_tag in si_tags:
-                    t_tag = si_tag.xpath("*[local-name()='t']")
-                    if (t_tag == []):
-                        self.shared_strings.append(None)
-                    else:
-                        self.shared_strings.append(t_tag[0].text)
-
+                # Check if file generated with sharedString or with inlineStr
+                if (os.path.isfile('xl/sharedStrings.xml')):
+                    self.print_log('Found sharedStrings')
+                    # Extract all strings from sharedStrings.xml
+                    shared_string_xml_object = etree.parse('xl/sharedStrings.xml')
+                    si_tags = shared_string_xml_object.getroot().xpath("//*[local-name()='sst']/*[local-name()='si']")
+                    for si_tag in si_tags:
+                        t_tag = si_tag.xpath("*[local-name()='t']")
+                        if (t_tag == []):
+                            self.shared_strings.append(None)
+                        else:
+                            self.shared_strings.append(t_tag[0].text)
+                else:
+                    self.print_log('sharedStrings not found')
                 # Process each sheet
                 for sheet_file_name in report_zip.namelist():
                     if 'xl/worksheets/sheet' in sheet_file_name:
@@ -108,28 +112,50 @@ class ParseXlsx:
     def parse_sheet(self, sheet_file_name):
         """ Parse sheet and  replace formulas strings to formulas format """
         sheet_xml_object = etree.parse(sheet_file_name)
-        c_tags = sheet_xml_object.getroot().xpath(
-            "//*[local-name()='sheetData']/*[local-name()='row']/*[local-name()='c'][@t='s']")
-
-        for c_tag in c_tags:
-            v_tag = c_tag.xpath("*[local-name()='v']")
-            if self.shared_strings[int(v_tag[0].text)]:
-                cur_shared_string = self.shared_strings[int(v_tag[0].text)]
-                if cur_shared_string[0] == '=':
-                    self.print_log(
-                        'Find formula -> {0} in row {1}'.format(cur_shared_string, c_tag.get('r')))
-                    right_formula = convert_rc_formula(cur_shared_string[1:], c_tag.get('r'))
-                    c_tag.remove(v_tag[0])
-                    c_tag.append(etree.Element("f"))
-                    f_tag = c_tag.xpath("*[local-name()='f']")
-                    f_tag[0].text = right_formula
-                    del c_tag.attrib["t"]
+        # If not found sharedStrings, then looking for inlineStr c tags
+        if not len(self.shared_strings):
+            c_tags = sheet_xml_object.getroot().xpath(
+                "//*[local-name()='sheetData']/*[local-name()='row']/*[local-name()='c'][@t='inlineStr']")
+            for c_tag in c_tags:
+                is_tag = c_tag.xpath("*[local-name()='is']")
+                t_tag = c_tag.xpath("*[local-name()='is']/*[local-name()='t']")
+                if len(t_tag):
+                    cur_inline_string = t_tag[0].text
+                    if cur_inline_string != None and cur_inline_string[0] == '=':
+                        self.print_log(
+                            'Found formula -> {0} in row {1}'.format(cur_inline_string, c_tag.get('r')))
+                        right_formula = convert_rc_formula(cur_inline_string[1:], c_tag.get('r'))
+                        c_tag.remove(is_tag[0])
+                        # Generate formula
+                        self.gen_formula_tag(c_tag, right_formula)
+        else:
+            c_tags = sheet_xml_object.getroot().xpath(
+                "//*[local-name()='sheetData']/*[local-name()='row']/*[local-name()='c'][@t='s']")
+            for c_tag in c_tags:
+                v_tag = c_tag.xpath("*[local-name()='v']")
+                if self.shared_strings[int(v_tag[0].text)]:
+                    cur_shared_string = self.shared_strings[int(v_tag[0].text)]
+                    if cur_shared_string[0] == '=':
+                        self.print_log(
+                            'Found formula -> {0} in row {1}'.format(cur_shared_string, c_tag.get('r')))
+                        right_formula = convert_rc_formula(cur_shared_string[1:], c_tag.get('r'))
+                        c_tag.remove(v_tag[0])
+                        # Generate formula
+                        self.gen_formula_tag(c_tag, right_formula)
 
         file_handler = open(sheet_file_name, "w")
         file_handler.writelines(etree.tostring(sheet_xml_object, pretty_print=True))
         file_handler.close()
 
+    def gen_formula_tag(self, c_tag, right_formula):
+        """ Generate new formula tag """
+        c_tag.append(etree.Element("f"))
+        f_tag = c_tag.xpath("*[local-name()='f']")
+        f_tag[0].text = right_formula
+        del c_tag.attrib["t"]
+
     def print_log(self, message):
+        """ Show log messages during work """
         if self.show_log:
             print(message)
 
