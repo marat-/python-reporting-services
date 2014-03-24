@@ -7,7 +7,6 @@
     :license: Apache License.
 
 """
-
 from urllib import quote
 
 import requests
@@ -15,10 +14,16 @@ import requests
 
 class SSRSReport(object):
     """ SQL Server Reportin Services Report object """
+
     def __init__(self, server, report_path, auth=(), params={}, output_format='EXCEL'):
         self._server = server
         self._report_path = report_path
-        self._auth = auth
+        self._auth = ()
+        if auth:
+            self._auth = (
+                auth[0].decode('utf-8').encode('cp1251').decode('latin1'),
+                auth[1].decode('utf-8').encode('cp1251').decode('latin1'),
+            )
         self._params = params
         self._format = output_format
         self._connection_string = self.get_connection_string(params)

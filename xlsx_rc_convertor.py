@@ -55,7 +55,7 @@ def convert_rc_formula(formula, address):
     assert isinstance(formula, (str, unicode))
     assert isinstance(address, (str, unicode))
 
-    formula = formula.upper()
+    formula = formula.upper().replace(' ', '').replace(';', ',')
     address = address.upper()
 
     # Convert cell's string-address to tuple like as (row, col)
@@ -119,7 +119,7 @@ def convert_rc_formula(formula, address):
 if __name__ == '__main__':
     print('R1C1 to A1 convertation sample:')
 
-    address = 'ZZ20'
-    formula = 'R24C[-1]'
+    address = 'D43'
+    formula = '=R[ 30]C * R[- 32]C * R[- 29]C'
 
     print(convert_rc_formula(formula, address))
