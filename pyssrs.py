@@ -13,9 +13,9 @@ import requests
 
 
 class SSRSReport(object):
-    """ SQL Server Reportin Services Report object """
+    """ SQL Server Reporting Services Report object """
 
-    def __init__(self, server, report_path, auth=(), params={}, output_format='EXCEL'):
+    def __init__(self, server, report_path, auth=(), params={}, multiparams_divider='', output_format='EXCEL'):
         self._server = server
         self._report_path = report_path
         self._auth = ()
@@ -25,8 +25,9 @@ class SSRSReport(object):
                 auth[1].decode('utf-8').encode('cp1251').decode('latin1'),
             )
         self._params = params
+        self._multiparams_divider = multiparams_divider
         self._format = output_format
-        self._connection_string = self.get_connection_string(params)
+        self._connection_string = self.get_connection_string(params, multiparams_divider)
         self._report_request = None
         self._output_file = None
 
@@ -82,16 +83,20 @@ class SSRSReport(object):
         assert isinstance(value, (str, unicode))
         self._format = value
 
-    def get_connection_string(self, params={}):
+    def get_connection_string(self, params={}, divider=''):
         """
             Builds full URL to connect to report, eg.
-            http://your-reporting.com/ReportServer?/Report/Path&rs:FORMAT=EXCEL&item_id=666
+            http://your-reporting.com/ReportServer?/Report/Path&rs:FORMAT=EXCEL&item_id=666&contractor_id=9899&contractor_id=12775&contractor_id=3459
         """
         url_params = []
         for key, value in params.iteritems():
             if isinstance(value, (str, unicode)):
-                # Convert string params to url-format and add them to list
-                value = quote("{0}".format(value).encode('cp1251'))
+                # Convert multi-value parameters
+                if divider and divider in value:
+                    value = '&{0}='.format(key).join(value.split(divider))
+                else:
+                    # Convert string params to url-format and add them to list
+                    value = quote("{0}".format(value).encode('cp1251'))
             url_params.append("{0}={1}".format(key, value))
         params_dict = {
             'server': self.server,
@@ -136,7 +141,9 @@ if __name__ == '__main__':
         '/Report/Path',
         output_format='EXCEL',
         params={
-            'item_id': 666
-        }
+            'item_id': 666,
+            'contractor_id': '9899,12775,3459'
+        },
+        multiparams_divider=','
     )
     print(report.connection_string)
