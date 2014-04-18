@@ -27,12 +27,10 @@ def col2str(num, run=0):
 
 
 def col2int(colstr):
-    """ Converts column literal to number (eg. 'AA' = 27) """
-    # TODO: works for range('A', 'ZZ')
+    """ Converts column literal to number (eg. 'AA' = 27, 'AAA' = 703 etc.) """
     res = 0
-    for i, s in enumerate(colstr.upper()):
-        res += (ord(s) - 64) + res * 26
-    res -= (ord(colstr[0]) - 64) * (len(colstr) - 1)
+    for i, s in enumerate(colstr.upper()[::-1]):
+        res += (ord(s)-64)*(26**i)
 
     return res
 
@@ -41,11 +39,8 @@ def check_range(value, mode=0):
     """ Validate ranges of column (mode=1) or row (mode=0) """
     if not isinstance(value, int):
         value = int(value)
-    bound = not mode and 1048756 or 16384
-    if value < 1:
-        value += bound
-    if value > bound:
-        value -= bound
+    bound = 16384 if mode else 1048756
+    value %= bound
 
     return value
 
