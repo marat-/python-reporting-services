@@ -50,7 +50,15 @@ def convert_rc_formula(formula, address):
     assert isinstance(formula, (str, unicode))
     assert isinstance(address, (str, unicode))
 
-    formula = formula.upper().replace(' ', '').replace(';', ',')
+    formula = formula.replace(';', ',')
+    # Excluding for formulae with sheet links
+    if '!' not in formula:
+        formula = formula.upper().replace(' ', '')
+
+    # Delete format from formula
+    format_re = re.compile(r'@.*@')
+    formula = re.sub(format_re, '', formula)
+
     address = address.upper()
 
     # Convert cell's string-address to tuple like as (row, col)
@@ -86,15 +94,19 @@ def convert_rc_formula(formula, address):
                     )
                 )
             elif srch.get('offset'):
-                res_part.append(
-                    col2str(
-                        check_range(
-                            int(srch.get('offset')[2:-1]) + address[i],
-                            mode=i
-                        ),
-                        run=i
+                try:
+                    res_part.append(
+                        col2str(
+                            check_range(
+                                int(srch.get('offset')[2:-1]) + address[i],
+                                mode=i
+                            ),
+                            run=i
+                        )
                     )
-                )
+                except:
+                    raise BaseException
+                    exit(1)
 
         # Write parts to list
         replace_list.append(
@@ -111,10 +123,23 @@ def convert_rc_formula(formula, address):
     return formula
 
 
+def get_cell_format(formula):
+    """ Get format from formula to set to formula's cell """
+    assert isinstance(formula, str)
+    format_reg = re.compile(r'(?P<format>@.*@)')
+    fmt_search = format_reg.search(formula)
+    ex_format = fmt_search.group('format') if fmt_search else ''
+
+    # Return string without @ and '
+    return ex_format[1:-1]
+
+
 if __name__ == '__main__':
     print('R1C1 to A1 convertation sample:')
 
     address = 'D43'
-    formula = '=R[ 30]C * R[- 32]C * R[- 29]C'
+    formula = "MAX(R[1]:R[5])*R2*R4/1000"
+
+    print(get_cell_format(formula))
 
     print(convert_rc_formula(formula, address))
