@@ -14,6 +14,7 @@ import shutil
 import time
 from zipfile import ZipFile, ZIP_DEFLATED
 from lxml import etree
+from copy import deepcopy
 
 from xlsx_rc_convertor import convert_rc_formula, get_cell_format
 
@@ -146,7 +147,7 @@ class ParseXlsx:
                         self.gen_formula_tag(c_tag, right_formula)
                         # Set format to formula's cell
                         if '@' in cur_inline_string[1:]:
-                            self.set_format(c_tag.get('s'), get_cell_format(cur_inline_string[1:]))
+                            c_tag.attrib['s'] = self.set_format(c_tag.get('s'), get_cell_format(cur_inline_string[1:]))
         else:
             c_tags = sheet_xml_object.getroot().xpath(
                 "//*[local-name()='sheetData']/*[local-name()='row']/*[local-name()='c'][@t='s']"
@@ -165,7 +166,7 @@ class ParseXlsx:
                         self.gen_formula_tag(c_tag, right_formula)
                         # Set format to formula's cell
                         if '@' in cur_shared_string[1:]:
-                            self.set_format(c_tag.get('s'), get_cell_format(cur_shared_string[1:]))
+                            c_tag.attrib['s'] = self.set_format(c_tag.get('s'), get_cell_format(cur_shared_string[1:]))
 
         self.save_xml_to_file(sheet_xml_object, sheet_file_name)
 
@@ -187,17 +188,32 @@ class ParseXlsx:
         styles_file = 'xl/styles.xml'
         style_list = etree.parse(styles_file)
 
+        # Find current common format
+        cell_xfs = style_list.getroot().xpath(
+            "//*[local-name()='cellXfs']"
+        )[0]
+        current_xf = deepcopy(cell_xfs.xpath("*[local-name()='xf']")[int(style_id)])
+        # Append copied common format
+        cell_xfs.append(current_xf)
+        # Save last item's id as new style_id
+        style_id = cell_xfs.attrib['count']
+        # Increase cellXfs' count
+        cell_xfs.attrib['count'] = str(int(cell_xfs.get('count')) + 1)
+
+        # Get new common format
+        current_xf = cell_xfs.xpath("*[local-name()='xf']")[-1]
+
         # Edit numFmts block
         num_fmts = style_list.getroot().xpath(
             "//*[local-name()='numFmts'][@count]"
         )[0]
 
         # Check on existing current style
-        ex_check = num_fmts.xpath(
-            "*[local-name()='numFmt'][@numFmtId='{0}']".format(style_id)
+        exists_fmt = num_fmts.xpath(
+            '*[local-name()="numFmt"][@formatCode="[$-010419]{0}"]'.format(new_format)
         )
 
-        if not ex_check:
+        if not exists_fmt:
             # Add new numFmt
             num_fmts.append(etree.Element('numFmt'))
             new_item = num_fmts.xpath("*[local-name()='numFmt']")[-1]
@@ -207,14 +223,15 @@ class ParseXlsx:
             # Increase numFmts count
             num_fmts.attrib['count'] = str(int(num_fmts.get('count')) + 1)
 
-            # Add attrib to existing common format
-            cell_xfs = style_list.getroot().xpath(
-                "//*[local-name()='cellXfs']"
-            )[0]
-            current_xf = cell_xfs.xpath("*[local-name()='xf']")[int(style_id)]
-            current_xf.attrib["numFmtId"] = str(style_id)
+        # Set format number's id to new common style
+        current_xf.attrib["numFmtId"] = str(
+            exists_fmt[0].get('numFmtId') if exists_fmt else style_id
+        )
 
-            self.save_xml_to_file(style_list, styles_file)
+        self.save_xml_to_file(style_list, styles_file)
+
+        return style_id
+
 
     @staticmethod
     def save_xml_to_file(xml_object, file_name):
@@ -225,6 +242,6 @@ class ParseXlsx:
 
 
 if __name__ == '__main__':
-    file_name = 'ŒŒ» ¿Ô-œ‡Í, _602077.xlsx'
+    file_name = 'test_file.xlsx'
     ParseXlsx(file_name, show_log=True, run=True)
     os.stat(file_name)
