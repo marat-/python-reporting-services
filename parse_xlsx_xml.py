@@ -53,13 +53,15 @@ class RecursiveFileIterator:
 class ParseXlsx:
     """ Parse xlsx file and replace formulas strings to formulas format """
 
-    def __init__(self, file_name, task_id=0, show_log=False, run=False):
+    def __init__(self, file_name, task_id=0, show_log=False, run=False, print_view=False):
         """ Init start parameters """
         self.file_name = file_name
         self.task_id = task_id
         self.main_temp_dir = 'temp'
         self.show_log = show_log
         self.shared_strings = []
+        self.style_list = None
+        self.print_view = print_view
         if run:
             self.main()
 
@@ -117,6 +119,8 @@ class ParseXlsx:
 
     def parse_sheet(self, sheet_file_name):
         """ Parse sheet and  replace formulas strings to formulas format """
+        styles_file = 'xl/styles.xml'
+        self.style_list = etree.parse(styles_file)
         sheet_xml_object = etree.parse(sheet_file_name)
         # Removing NaN values
         v_nan_tags = sheet_xml_object.getroot().xpath(
@@ -142,9 +146,10 @@ class ParseXlsx:
                             'Found formula -> {0} in row {1}'.format(cur_inline_string, c_tag.get('r'))
                         )
                         right_formula = convert_rc_formula(cur_inline_string[1:], c_tag.get('r'))
-                        c_tag.remove(is_tag[0])
-                        # Generate formula
-                        self.gen_formula_tag(c_tag, right_formula)
+                        if right_formula:
+                            c_tag.remove(is_tag[0])
+                            # Generate formula
+                            self.gen_formula_tag(c_tag, right_formula)
                         # Set format to formula's cell
                         if '@' in cur_inline_string[1:]:
                             c_tag.attrib['s'] = self.set_format(c_tag.get('s'), get_cell_format(cur_inline_string[1:]))
@@ -161,13 +166,20 @@ class ParseXlsx:
                             'Found formula -> {0} in row {1}'.format(cur_shared_string, c_tag.get('r'))
                         )
                         right_formula = convert_rc_formula(cur_shared_string[1:], c_tag.get('r'))
-                        c_tag.remove(v_tag[0])
-                        # Generate formula
-                        self.gen_formula_tag(c_tag, right_formula)
+                        if right_formula:
+                            c_tag.remove(v_tag[0])
+                            # Generate formula
+                            self.gen_formula_tag(c_tag, right_formula)
                         # Set format to formula's cell
                         if '@' in cur_shared_string[1:]:
                             c_tag.attrib['s'] = self.set_format(c_tag.get('s'), get_cell_format(cur_shared_string[1:]))
 
+        # Save changes in styles.xml
+        self.save_xml_to_file(self.style_list, styles_file)
+
+        # Save changes in sheetN.xml
+        if self.print_view:
+            sheet_xml_object = self.set_print_view(sheet_xml_object)
         self.save_xml_to_file(sheet_xml_object, sheet_file_name)
 
     @staticmethod
@@ -185,11 +197,10 @@ class ParseXlsx:
 
     def set_format(self, style_id, new_format):
         """ Set formula's cell format """
-        styles_file = 'xl/styles.xml'
-        style_list = etree.parse(styles_file)
+        new_format = new_format.replace("'", '"')
 
         # Find current common format
-        cell_xfs = style_list.getroot().xpath(
+        cell_xfs = self.style_list.getroot().xpath(
             "//*[local-name()='cellXfs']"
         )[0]
         current_xf = deepcopy(cell_xfs.xpath("*[local-name()='xf']")[int(style_id)])
@@ -204,13 +215,13 @@ class ParseXlsx:
         current_xf = cell_xfs.xpath("*[local-name()='xf']")[-1]
 
         # Edit numFmts block
-        num_fmts = style_list.getroot().xpath(
+        num_fmts = self.style_list.getroot().xpath(
             "//*[local-name()='numFmts'][@count]"
         )[0]
 
         # Check on existing current style
         exists_fmt = num_fmts.xpath(
-            '*[local-name()="numFmt"][@formatCode="[$-010419]{0}"]'.format(new_format)
+            """*[local-name()='numFmt'][@formatCode='[$-010419]{0}']""".format(new_format)
         )
 
         if not exists_fmt:
@@ -218,7 +229,7 @@ class ParseXlsx:
             num_fmts.append(etree.Element('numFmt'))
             new_item = num_fmts.xpath("*[local-name()='numFmt']")[-1]
             new_item.attrib['numFmtId'] = str(style_id)
-            new_item.attrib['formatCode'] = "[$-010419]{0}".format(new_format)
+            new_item.attrib['formatCode'] = """[$-010419]{0}""".format(new_format)
 
             # Increase numFmts count
             num_fmts.attrib['count'] = str(int(num_fmts.get('count')) + 1)
@@ -228,10 +239,25 @@ class ParseXlsx:
             exists_fmt[0].get('numFmtId') if exists_fmt else style_id
         )
 
-        self.save_xml_to_file(style_list, styles_file)
-
         return style_id
 
+    @staticmethod
+    def set_print_view(sheet_object):
+        """ Set pageSetup-tag """
+        # Set fixToPage property to True
+        sheet_pr = sheet_object.getroot().xpath("//*[local-name()='sheetPr']")[0]
+        if not len(sheet_pr):
+            sheet_object.getroot().xpath("//")[0].insert(0, etree.Element('sheetPr'))
+            sheet_pr = sheet_object.getroot().xpath("//*[local-name()='sheetPr']")[0]
+        sheet_pr.append(etree.Element('pageSetUpPr', {'fitToPage': '1'}))
+
+        # Set orientation to landscape and fit to width and height to True
+        page_setup = sheet_object.getroot().xpath("//*[local-name()='pageSetup']")[0]
+        page_setup.attrib['orientation'] = 'landscape'
+        page_setup.attrib['fitToWidth'] = '1'
+        page_setup.attrib['fitToHeight'] = '1'
+
+        return sheet_object
 
     @staticmethod
     def save_xml_to_file(xml_object, file_name):
@@ -242,6 +268,6 @@ class ParseXlsx:
 
 
 if __name__ == '__main__':
-    file_name = 'test_file.xlsx'
+    file_name = 'KeyIndicatorsTT.xlsx'
     ParseXlsx(file_name, show_log=True, run=True)
     os.stat(file_name)

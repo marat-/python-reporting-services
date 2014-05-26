@@ -74,11 +74,12 @@ def convert_rc_formula(formula, address):
     )
 
     # Get cell offsets from formula
-    form_re = re.compile(r'(?P<row_offset>R\[?\-?\d*\]?)(?P<col_offset>C\[?\-?\d*\]?)')
+    # TODO: '=R[1]C-RC1'
+    form_re = re.compile(r'(?P<row_offset>R\[?\-?\d*]?)(?P<col_offset>C\[?\-?\d*]?)')
     form = form_re.findall(formula)
     # Parse rows and columns
     replace_list = []
-    part_re = re.compile(r'(?P<offset>[RC]\[\-?\d+\]?)|(?P<abs>[RC]\d*)')
+    part_re = re.compile(r'(?P<offset>[RC]\[\-?\d+]?)|(?P<abs>[RC]\d*)')
     for part in form:
         res_part = []
         for i, item in enumerate(part):
@@ -108,6 +109,7 @@ def convert_rc_formula(formula, address):
                     raise BaseException
                     exit(1)
 
+
         # Write parts to list
         replace_list.append(
             (
@@ -118,14 +120,14 @@ def convert_rc_formula(formula, address):
 
     # Replace formula and return
     for repl in replace_list:
-        formula = formula.replace(repl[0], repl[1])
+        formula = formula.replace(repl[0], repl[1], 1)
 
     return formula
 
 
 def get_cell_format(formula):
     """ Get format from formula to set to formula's cell """
-    assert isinstance(formula, str)
+    assert isinstance(formula, (str, unicode))
     format_reg = re.compile(r'(?P<format>@.*@)')
     fmt_search = format_reg.search(formula)
     ex_format = fmt_search.group('format') if fmt_search else ''
@@ -135,10 +137,10 @@ def get_cell_format(formula):
 
 
 if __name__ == '__main__':
-    print('R1C1 to A1 convertation sample:')
+    print('R1C1 to A1 convert sample:')
 
-    address = 'D43'
-    formula = "MAX(R[1]:R[5])*R2*R4/1000"
+    address = 'G20'
+    formula = "=R[-1]C-R[-1]C[1]"
 
     print(get_cell_format(formula))
 
