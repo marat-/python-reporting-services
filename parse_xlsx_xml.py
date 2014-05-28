@@ -12,11 +12,12 @@ import sys
 import os
 import shutil
 import time
+import re
 from zipfile import ZipFile, ZIP_DEFLATED
 from lxml import etree
 from copy import deepcopy
 
-from xlsx_rc_convertor import convert_rc_formula, get_cell_format
+from xlsx_rc_convertor import convert_rc_formula, get_cell_format, col2str
 
 
 class RecursiveFileIterator:
@@ -53,7 +54,7 @@ class RecursiveFileIterator:
 class ParseXlsx:
     """ Parse xlsx file and replace formulas strings to formulas format """
 
-    def __init__(self, file_name, task_id=0, show_log=False, run=False, print_view=False):
+    def __init__(self, file_name, task_id=0, show_log=False, run=False, **kwargs):
         """ Init start parameters """
         self.file_name = file_name
         self.task_id = task_id
@@ -61,7 +62,14 @@ class ParseXlsx:
         self.show_log = show_log
         self.shared_strings = []
         self.style_list = None
-        self.print_view = print_view
+
+        # Print view params
+        self.print_view = kwargs.get('print_view')
+        self.landscape = 'landscape' if kwargs.get('landscape') else 'portrait'
+        self.fit_to_width = str(int(kwargs.get('fit_to_width', 0)))
+        self.fit_to_height = str(int(kwargs.get('fit_to_height', 0)))
+        self.fix_area = kwargs.get('fix_area', [])
+
         if run:
             self.main()
 
@@ -177,9 +185,14 @@ class ParseXlsx:
         # Save changes in styles.xml
         self.save_xml_to_file(self.style_list, styles_file)
 
-        # Save changes in sheetN.xml
+        # Set sheet styles
+        sh_num = int(re.compile(r'\d+').findall(sheet_file_name)[-1])
         if self.print_view:
             sheet_xml_object = self.set_print_view(sheet_xml_object)
+        if sh_num <= len(self.fix_area):
+            sheet_xml_object = self.set_fixed_area(sheet_xml_object, int(self.fix_area[sh_num-1][0]), int(self.fix_area[sh_num-1][1]))
+
+        # Save changes in sheetN.xml
         self.save_xml_to_file(sheet_xml_object, sheet_file_name)
 
     @staticmethod
@@ -241,21 +254,55 @@ class ParseXlsx:
 
         return style_id
 
-    @staticmethod
-    def set_print_view(sheet_object):
+    def set_print_view(self, sheet_object):
         """ Set pageSetup-tag """
         # Set fixToPage property to True
-        sheet_pr = sheet_object.getroot().xpath("//*[local-name()='sheetPr']")[0]
+        sheet_pr = sheet_object.getroot().xpath("//*[local-name()='sheetPr']")
         if not len(sheet_pr):
             sheet_object.getroot().xpath("//")[0].insert(0, etree.Element('sheetPr'))
             sheet_pr = sheet_object.getroot().xpath("//*[local-name()='sheetPr']")[0]
+        else:
+            sheet_pr = sheet_pr[0]
         sheet_pr.append(etree.Element('pageSetUpPr', {'fitToPage': '1'}))
 
         # Set orientation to landscape and fit to width and height to True
         page_setup = sheet_object.getroot().xpath("//*[local-name()='pageSetup']")[0]
-        page_setup.attrib['orientation'] = 'landscape'
-        page_setup.attrib['fitToWidth'] = '1'
-        page_setup.attrib['fitToHeight'] = '1'
+        page_setup.attrib['orientation'] = self.landscape
+        page_setup.attrib['fitToWidth'] = self.fit_to_width
+        page_setup.attrib['fitToHeight'] = self.fit_to_height
+
+        return sheet_object
+
+    @staticmethod
+    def set_fixed_area(sheet_object, col=0, row=0):
+        """ Set fixed area to sheet """
+        # Get sheetViews tag
+        sheet_views = sheet_object.getroot().xpath("//*[local-name()='sheetViews']")
+        if not len(sheet_views):
+            sheet_object.getroot().xpath("//")[0].insert(0, etree.Element('sheetViews'))
+            sheet_views = sheet_object.getroot().xpath("//*[local-name()='sheetViews']")[0]
+        else:
+            sheet_views = sheet_views[0]
+
+        # Get sheetView tag
+        cur_sheet_view = sheet_views.xpath("*[local-name()='sheetView']")
+        if not len(cur_sheet_view):
+            sheet_views.insert(0, etree.Element('sheetView'))
+            cur_sheet_view = sheet_views.xpath("*[local-name()='sheetView']")[0]
+        else:
+            cur_sheet_view = cur_sheet_view[0]
+
+        # Add new pane to fix current area
+        cur_sheet_view.append(etree.Element('pane', {
+            'xSplit': str(col),
+            'ySplit': str(row),
+            'topLeftCell': "{col}{row}".format(**dict(
+                col=col2str(col+1, run=1),
+                row=row+1,
+            )),
+            'activePane': "bottomRight",
+            'state': "frozen",
+        }))
 
         return sheet_object
 
